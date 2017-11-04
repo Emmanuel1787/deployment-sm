@@ -1,0 +1,24 @@
+version: "3.2"
+
+networks:
+  broker:
+    external:
+      name: broker_broker
+
+services:
+  auth:
+    image: ${IMAGE_EMQ_TEST_AUTH}
+    networks:
+      - broker
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      placement:
+        constraints:
+          - node.role == worker

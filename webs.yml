@@ -1,0 +1,334 @@
+version: "3.3"
+
+networks:
+  proxy-webs:
+    external:
+      name: nets_proxy-webs
+
+configs:
+  nginx_config:
+    file: ./configs/nginx.conf
+
+services:
+  www:
+    image: ${IMAGE_WEBS_WWW}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.aclName: "90-www"
+        com.df.servicePath: "/"
+        com.df.port: "80"
+      placement:
+        constraints:
+          - node.role == worker
+
+  admin:
+    image: ${IMAGE_WEBS_ADMIN}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+      stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "admin${SUBDOMAIN_SUFFIX}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.aclName: "10-admin"
+        com.df.servicePath: "/"
+        com.df.port: "80"
+      placement:
+        constraints:
+          - node.role == worker
+
+  blog:
+    image: ${IMAGE_WEBS_BLOG}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.aclName: "50-blog"
+        com.df.servicePath: "/blog"
+        com.df.port: "80"
+      placement:
+        constraints:
+          - node.role == worker
+
+  news:
+    image: ${IMAGE_WEBS_NEWS}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.aclName: "50-news"
+        com.df.servicePath: "/news"
+        com.df.port: "80"
+      placement:
+        constraints:
+          - node.role == worker
+
+  taxilines:
+    image: ${IMAGE_WEBS_TAXILINES}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.aclName: "10-taxilines"
+        com.df.servicePath: "/app/taxilines"
+        com.df.port: "80"
+        com.df.reqPathSearch: "^/app/taxilines"
+        com.df.reqPathReplace: "/"
+      placement:
+        constraints:
+          - node.role == worker
+
+  driver:
+    image: ${IMAGE_WEBS_DRIVER}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.aclName: "10-driver"
+        com.df.servicePath: "/app/driver"
+        com.df.port: "80"
+        com.df.reqPathSearch: "^/app/driver"
+        com.df.reqPathReplace: "/"
+      placement:
+        constraints:
+          - node.role == worker
+
+  corporate:
+    image: ${IMAGE_WEBS_CORPORATE}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.aclName: "10-corporate"
+        com.df.servicePath: "/app/corporate"
+        com.df.port: "80"
+        com.df.reqPathSearch: "^/app/corporate"
+        com.df.reqPathReplace: "/"
+      placement:
+        constraints:
+          - node.role == worker
+
+  dispatch:
+    image: ${IMAGE_WEBS_DISPATCH}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.aclName: "10-dispatch"
+        com.df.servicePath: "/app/dispatch"
+        com.df.port: "80"
+        com.df.reqPathSearch: "^/app/dispatch"
+        com.df.reqPathReplace: "/"
+      placement:
+        constraints:
+          - node.role == worker
+
+  appsupport:
+    image: ${IMAGE_WEBS_APPSUPPORT}
+    networks:
+      - proxy-webs
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.aclName: "10-appsupport"
+        com.df.servicePath: "/r"
+        com.df.port: "80"
+        com.df.reqPathSearch: "^/r"
+        com.df.reqPathReplace: "/"
+      placement:
+        constraints:
+          - node.role == worker
+
+  ulinking:
+    image: ${IMAGE_WEBS_ULINKING}
+    networks:
+      - proxy-webs
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+        mode: 0440
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "nginx"
+    stop_signal: SIGSTOP
+    deploy:
+      labels:
+        mode: replicated
+        replicas: 2
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/webs
+        com.df.serviceDomain: "${WEBSITE}"
+        com.df.notifyWebs: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.aclName: "10-ulinking"
+        com.df.servicePath: "/.well-known,/u"
+        com.df.port: "80"
+      placement:
+        constraints:
+          - node.role == worker

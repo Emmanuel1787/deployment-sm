@@ -1,0 +1,5 @@
+modify tunnel.yml to attach to attachable networks that you'd like to inspect
+allow "your" public IP to be able to talk to the kcpserver listening port (6500) (the SwarmWideSG in the case of DDC for AWS)
+deploy tunnel using UCP
+bring up client on your workstation
+you can use the socks proxy running on port 1080

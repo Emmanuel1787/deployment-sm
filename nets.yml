@@ -1,0 +1,83 @@
+version: "3.2"
+
+networks:
+  proxy:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.10.0.0/16
+    labels:
+      com.docker.ucp.access.label: ${ACCESS_LEVEL}/proxy
+
+  proxy-webs:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.11.0.0/16
+    labels:
+      com.docker.ucp.access.label: ${ACCESS_LEVEL}/proxy
+
+  elk:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.30.10.0/24
+    labels:
+      com.docker.ucp.access.label: ${ACCESS_LEVEL}/elk
+
+  monitoring:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.30.20.0/24
+    labels:
+      com.docker.ucp.access.label: ${ACCESS_LEVEL}/monitoring
+
+  be:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.40.0.0/16
+    labels:
+      com.docker.ucp.access.label: ${ACCESS_LEVEL}/be
+
+  broker:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.0.0/16
+    labels:
+      com.docker.ucp.access.label: ${ACCESS_LEVEL}/broker
+
+services:
+  dummy:
+    image: alpine
+    networks:
+      - monitoring
+      - elk
+      - proxy
+      - proxy-webs
+      - be
+      - broker
+    deploy:
+      replicas: 0

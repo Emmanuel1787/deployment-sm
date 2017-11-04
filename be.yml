@@ -1,0 +1,217 @@
+version: "3.2"
+
+networks:
+  be:
+    external:
+      name: nets_be
+
+  broker:
+    external:
+      name: nets_broker
+
+  proxy:
+    external:
+      name: nets_proxy
+
+secrets:
+  api_secrets:
+    external:
+      name: ${be_api_secrets}
+  consumers_secrets:
+    external:
+      name: ${be_consumers_secrets}
+  collectors_secrets:
+    external:
+      name: ${be_collectors_secrets}
+  jobs_secrets:
+    external:
+      name: ${be_jobs_secrets}
+  payments_secrets:
+    external:
+      name: ${be_payments_secrets}
+
+services:
+  api:
+    image: ${IMAGE_BE_API}
+    networks:
+      - be
+      - broker
+      - proxy
+    environment:
+      JAVA_OPTS: -Xmx3g -Xms1g
+      JMX: 'true'
+      MQTT_1_PORT: tcp://emq:1883
+      INT_ADDRESS: api:8080
+      SVC_PAYMENTS: payments:8081
+    secrets:
+      - source: api_secrets
+        target: api_secrets.env
+    command: sh -c 'exec env `cat /run/secrets/*.env | xargs` /wd/start.sh'
+    healthcheck:
+       test: ["CMD", "curl", "-sf", "http://localhost:8080/v1/utilities/health"]
+       interval: 30s
+       timeout: 4s
+       retries: 3
+    stop_grace_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "api"
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+      replicas: ${BE_API_REPLICAS}
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: any
+        delay: 5s
+        window: 60s
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/be
+        com.df.notify: "true"
+        com.df.distribute: "true"
+        com.df.reqMode: "http"
+        com.df.port: "8080"
+        com.df.serviceDomain: "api${SUBDOMAIN_SUFFIX}"
+        com.df.timeoutServer: 300
+        com.df.delResHeader: >-
+          Server,
+          X-Operation-Id,
+          X-Response-Time,
+          X-Request-Id,
+          X-Actor-Id,
+          X-Client-Id
+
+  consumers:
+    image: ${IMAGE_BE_CONSUMERS}
+    networks:
+      - be
+    environment:
+      JMX: 'true'
+      MQTT_1_PORT: tcp://emq:1883
+    secrets:
+      - source: consumers_secrets
+        target: consumers_secrets.env
+    command: sh -c 'env `cat /run/secrets/*.env | xargs` java -jar nekso-consumers.jar'
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "consumers"
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/be
+      placement:
+        constraints:
+          - node.role == worker
+      replicas: ${BE_CONSUMERS_REPLICAS}
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: any
+        delay: 5s
+        window: 60s
+
+  jobs:
+    image: ${IMAGE_BE_JOBS}
+    networks:
+      - be
+    environment:
+      JMX: 'true'
+    secrets:
+      - source: jobs_secrets
+        target: jobs_secrets.env
+    command: sh -c "env `cat /run/secrets/*.env | xargs` java -jar nekso-jobs.jar"
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "jobs"
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/be
+      placement:
+        constraints:
+          - node.role == worker
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: any
+        delay: 5s
+        window: 60s
+
+  collectors:
+    image: ${IMAGE_BE_COLLECTORS}
+    environment:
+      MQTT_1_PORT: tcp://emq:1883
+    networks:
+      - be
+      - broker
+    secrets:
+      - source: collectors_secrets
+        target: config.json
+    command: sh -c "java -jar nekso-mqtt-collector.jar -conf /run/secrets/config.json -instances 1 -worker"
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "collectors"
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/be
+      placement:
+        constraints:
+          - node.role == worker
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+        window: 30s
+
+  payments:
+    image: ${IMAGE_BE_PAYMENTS}
+    networks:
+      - be
+    environment:
+      LOG_LEVEL: DEBUG
+      CONFIG: /run/secrets/payments_secrets
+    secrets:
+      - payments_secrets
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "payments"
+    healthcheck:
+       test: ["CMD", "wget", "-qO-", "http://localhost:8081/v1/VE/merchants/CARD"]
+       interval: 30s
+       timeout: 4s
+       retries: 3
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/be
+      placement:
+        constraints:
+          - node.role == worker
+      replicas: ${BE_PAYMENTS_REPLICAS}
+      restart_policy:
+        condition: any
+        delay: 5s
+        window: 30s

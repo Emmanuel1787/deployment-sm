@@ -1,0 +1,16 @@
+version: "3.2"
+
+services:
+  website:
+    image: nginx:1.11-alpine
+    ports:
+      - 3333:80
+    logging:
+      driver: json-file
+    labels:
+      com.blanclabs.log: "t"
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == worker

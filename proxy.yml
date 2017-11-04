@@ -1,0 +1,224 @@
+version: "3.2"
+
+networks:
+  proxy:
+    external:
+      name: nets_proxy
+
+  proxy-webs:
+    external:
+      name: nets_proxy-webs
+
+  monitoring:
+    external:
+      name: nets_monitoring
+
+
+secrets:
+  dfp_stats_user:
+    external:
+      name: ${proxy_stats_user}
+  dfp_stats_pass:
+    external:
+      name: ${proxy_stats_pass}
+
+services:
+
+  dfp:
+    image: vfarcic/docker-flow-proxy:${PROXY_DFP_TAG:-latest}
+    networks:
+      - proxy
+      - monitoring
+    ports:
+      - target: 80
+        published: 8080
+        protocol: tcp
+        mode: ingress
+    secrets:
+      - dfp_stats_user
+      - dfp_stats_pass
+    environment:
+      MODE: swarm
+      LISTENER_ADDRESS: dfsl
+      REPEAT_RELOAD: "true"
+      RELOAD_INTERVAL: 45000
+      DEBUG: "true"
+      # DEBUG_ERRORS_ONLY: "true"
+      STATS_URI: /proxyStats
+      STATS_PORT: 81
+      TIMEOUT_CLIENT: 20
+      TIMEOUT_CONNECT: 5
+      TIMEOUT_QUEUE: 30
+      TIMEOUT_SERVER: 20
+      TIMEOUT_TUNNEL: 3600
+      TIMEOUT_HTTP_REQUEST: 5
+      TIMEOUT_HTTP_KEEP_ALIVE: 15
+      COMPRESSION_ALGO: gzip
+      COMPRESSION_TYPE: text/html text/css text/plain application/javascript application/json text/xml application/xml application/xml+rss text/javascript image/svg+xml
+      #default
+      DEBUG_HTTP_FORMAT: >
+        "%ci:%cp [%tr] %ft %b/%s %Tq/%Tw/%Tc/%Tr/%Tt %ST %B %CC
+        %CS %tsc %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs %{+Q}r"
+      DEFAULT_PORTS: "80 accept-proxy"
+      EXTRA_FRONTEND: |
+        # syntax-helper
+            option dontlognull
+            rspdel Server
+            http-response set-header Strict-Transport-Security "max-age=31536000; includeSubdomains"
+            acl internal url_beg /v1/internal
+            http-request deny if internal
+            capture response header X-Operation-Id len 64
+            capture response header X-Response-Time len 7
+            capture response header X-Request-Id len 7
+            capture response header X-Actor-Id len 48
+            capture response header X-Client-Id len 16
+            #plain traffic detection when not terminating
+            acl plain dst_port 80
+            redirect scheme https if plain
+            http-request add-header X-Forwarded-Proto https
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "proxy_backend"
+    healthcheck:
+       test: ["CMD", "grep", "be_api-be8080", "/cfg/haproxy.cfg"]
+       interval: 10s
+       timeout: 5s
+       retries: 10
+    stop_signal: SIGUSR1
+    deploy:
+      mode: replicated
+      replicas: 2
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/proxy
+      placement:
+        constraints:
+          - node.role == worker
+      update_config:
+        parallelism: 1
+      resources:
+        reservations:
+          memory: 10M
+
+  dfp-webs:
+    image: vfarcic/docker-flow-proxy:${PROXY_DFP_TAG:-latest}
+    networks:
+      - proxy-webs
+      - monitoring
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: ingress
+    secrets:
+      - dfp_stats_user
+      - dfp_stats_pass
+    environment:
+      MODE: swarm
+      LISTENER_ADDRESS: dfsl-webs
+      REPEAT_RELOAD: "true"
+      RELOAD_INTERVAL: 30000
+      DEBUG: "true"
+      #DEBUG_ERRORS_ONLY: "true"
+      STATS_URI: /proxyStats
+      STATS_PORT: 81
+      TIMEOUT_CLIENT: 20
+      TIMEOUT_CONNECT: 5
+      TIMEOUT_QUEUE: 30
+      TIMEOUT_SERVER: 20
+      TIMEOUT_TUNNEL: 3600
+      TIMEOUT_HTTP_REQUEST: 5
+      TIMEOUT_HTTP_KEEP_ALIVE: 15
+      COMPRESSION_ALGO: gzip
+      COMPRESSION_TYPE: text/html text/css text/plain application/javascript application/json text/xml application/xml application/xml+rss text/javascript image/svg+xml
+      DEFAULT_PORTS: "80 accept-proxy"
+      EXTRA_FRONTEND: |
+        # syntax-helper
+            option dontlognull
+            rspdel Server
+            http-response set-header Strict-Transport-Security "max-age=31536000; includeSubdomains"
+            http-request redirect code 301 location https://${WEBSITE}/news%[capture.req.uri] if { hdr(host) -i news${SUBDOMAIN_SUFFIX} }
+            http-request redirect code 301 location https://${WEBSITE}/blog%[capture.req.uri] if { hdr(host) -i blog${SUBDOMAIN_SUFFIX} }
+            http-request redirect code 301 location https://${WEBSITE}/app/taxilines%[capture.req.uri] if { hdr(host) -i dashboard${SUBDOMAIN_SUFFIX} }
+            http-request redirect code 301 prefix / drop-query append-slash if { path_reg ^/app/\w+$$$$ }
+            #plain traffic detection when not terminating
+            acl plain dst_port 80
+            redirect scheme https if plain
+            http-request add-header X-Forwarded-Proto https
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+      com.blanclabs.logType: "proxy_webs"
+    healthcheck:
+       test: ["CMD", "wget", "-qO-", "http://localhost:8080/v1/docker-flow-proxy/ping"]
+       interval: 5s
+       timeout: 5s
+       retries: 6
+    deploy:
+      mode: replicated
+      replicas: 2
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/proxy
+      placement:
+        constraints:
+          - node.role == worker
+      update_config:
+        parallelism: 1
+      resources:
+        reservations:
+          memory: 10M
+
+  dfsl:
+    image: vfarcic/docker-flow-swarm-listener:${PROXY_DFSL_TAG:-latest}
+    networks:
+      - proxy
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+    environment:
+      DF_NOTIFY_CREATE_SERVICE_URL: http://proxy:8080/v1/docker-flow-proxy/reconfigure
+      DF_NOTIFY_REMOVE_SERVICE_URL: http://proxy:8080/v1/docker-flow-proxy/remove
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/proxy
+      placement:
+        constraints:
+          - node.role == manager
+
+  dfsl-webs:
+    image: vfarcic/docker-flow-swarm-listener:${PROXY_DFSL_TAG:-latest}
+    networks:
+      - proxy-webs
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+    environment:
+      DF_NOTIFY_CREATE_SERVICE_URL: http://proxy-webs:8080/v1/docker-flow-proxy/reconfigure
+      DF_NOTIFY_REMOVE_SERVICE_URL: http://proxy-webs:8080/v1/docker-flow-proxy/remove
+      DF_NOTIFY_LABEL: com.df.notifyWebs
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    labels:
+      com.blanclabs.log: "t"
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/proxy
+      placement:
+        constraints:
+          - node.role == manager

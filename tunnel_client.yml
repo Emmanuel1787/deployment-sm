@@ -1,0 +1,10 @@
+version: "2.2"
+services:
+  client:
+    image: mritd/shadowsocks:${VERSION:-3.0.8}
+    network_mode: host
+    ports:
+      - 127.0.0.1:1080:1080
+    command: >
+      -m "ss-local" -s "-s 127.0.0.1 -p 6500 -b 0.0.0.0 -l 1080 -m aes-256-gcm -k ${PSK:-test123} --fast-open"
+      -x -e "kcpclient" -k "-r ${SERVER}:6500 -l :6500 -mode fast2"

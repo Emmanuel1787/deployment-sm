@@ -1,0 +1,24 @@
+---
+version: '3.2'
+
+secrets:
+  neksof:
+    external:
+      name: ${backs_neksof}
+
+services:
+  neksof:
+    image: ${IMAGE_BACKS}
+    secrets:
+      - source: neksof
+        target: parameters.env
+    labels:
+      com.docker.ucp.access_label: ${ACCESS_LABEL}/backs
+      com.blanclabs.log: "t"
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    command: >
+      start-cron
+      '0 17 \* \* \* /scripts/mongo-backup.sh >> /var/log/cron.log 2>&1'

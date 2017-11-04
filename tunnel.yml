@@ -1,0 +1,19 @@
+version: "3.1"
+
+networks:
+  dummy:
+
+services:
+  server:
+    image: mritd/shadowsocks:${VERSION:-3.0.8}
+    networks:
+      - dummy
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    ports:
+      - 6500:6500/udp
+    command: >
+      -m "ss-server" -s "-s 0.0.0.0 -p 6443 -m aes-256-gcm -k ${PSK:-test123} --fast-open"
+      -x -e "kcpserver" -k "-t 127.0.0.1:6443 -l :6500 -mode fast2"

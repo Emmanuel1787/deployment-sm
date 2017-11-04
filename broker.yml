@@ -1,0 +1,120 @@
+version: "3.2"
+
+networks:
+  broker:
+    external:
+      name: nets_broker
+
+secrets:
+  emq_secrets:
+    external:
+      name: ${broker_secrets}
+  emq_auth_username:
+    external:
+      name: ${broker_auth_username}
+  emq_acl:
+    external:
+      name: ${broker_acl}
+
+services:
+  emq:
+    build: emq-docker
+    image: ${IMAGE_BROKER_EMQ}
+    networks:
+      - broker
+    ports:
+      - target: 18883
+        published: 1883
+        protocol: tcp
+        mode: ingress
+      - target: 8083
+        published: 8083
+        protocol: tcp
+        mode: ingress
+    secrets:
+      - emq_secrets
+      - source: emq_auth_username
+        target: /opt/emqttd/etc/plugins/emq_auth_username.conf
+      - source: emq_acl
+        target: /opt/emqttd/etc/acl.conf
+    environment:
+      #clustering
+      EMQ_NAME: emq
+      EMQ_CLUSTER__NAME: emqcl
+      EMQ_CLUSTER__AUTOHEAL: "off"
+      EMQ_CLUSTER__AUTOCLEAN: 1m
+      EMQ_CLUSTER__DISCOVERY: dns
+      EMQ_CLUSTER__DNS__APP: emq
+      EMQ_CLUSTER__DNS__NAME: tasks.emq
+      #configs
+      EMQ_LOG__SYSLOG: "off"
+      EMQ_LOG__CONSOLE: console
+      EMQ_LOG__CONSOLE__LEVEL: info
+      EMQ_NODE__PROCESS_LIMIT: 2560
+      EMQ_NODE__MAX_PORTS: 30000
+      EMQ_NODE__MAX_ETS_TABLES: 100000
+      EMQ_LISTENER__TCP__EXTERNAL: 0.0.0.0:18883
+      EMQ_LISTENER__TCP__EXTERNAL__PROXY_PROTOCOL: "on"
+      EMQ_LISTENER__TCP__EXTERNAL__ACCEPTORS: 64
+      EMQ_LISTENER__TCP__EXTERNAL__MAX_CLIENTS: 9192
+      EMQ_LISTENER__TCP__EXTERNAL__BACKLOG: 1024
+      EMQ_LISTENER__TCP__EXTERNAL__RECBUF: 4KB
+      EMQ_LISTENER__TCP__EXTERNAL__SNDBUF: 4KB
+      EMQ_LISTENER__TCP__EXTERNAL__BUFFER: 4KB
+      EMQ_LISTENER__TCP__EXTERNAL__NODELAY: "true"
+      EMQ_LISTENER__TCP__INTERNAL: 0.0.0.0:1883
+      EMQ_LISTENER__TCP__INTERNAL__ACCEPTORS: 16
+      EMQ_LISTENER__TCP__INTERNAL__MAX_CLIENTS: 1024
+      EMQ_LISTENER__TCP__INTERNAL__BACKLOG: 1024
+      EMQ_LISTENER__TCP__INTERNAL__RECBUF: 4KB
+      EMQ_LISTENER__TCP__INTERNAL__SNDBUF: 4KB
+      EMQ_LISTENER__TCP__INTERNAL__BUFFER: 4KB
+      EMQ_LISTENER__TCP__INTERNAL__NODELAY: "true"
+      EMQ_LISTENER__WS__EXTERNAL__PROXY_PROTOCOL: "on"
+      EMQ_LISTENER__WS__EXTERNAL__ACCEPTORS: 16
+      EMQ_LISTENER__WS__EXTERNAL__MAX_CLIENTS: 1024
+      EMQ_LISTENER__WS__EXTERNAL__BACKLOG: 1024
+      EMQ_LISTENER__WS__EXTERNAL__RECBUF: 4KB
+      EMQ_LISTENER__WS__EXTERNAL__SNDBUF: 4KB
+      EMQ_LISTENER__WS__EXTERNAL__BUFFER: 4KB
+      EMQ_LISTENER__WS__EXTERNAL__NODELAY: "true"
+      EMQ_MQTT__ALLOW_ANONYMOUS: "false"
+      EMQ_MQTT__ACL_NOMATCH: "allow"
+      EMQ_LOADED_PLUGINS: >
+        emq_recon,
+        emq_modules,
+        emq_retainer,
+        emq_dashboard,
+        emq_auth_username,
+        emq_auth_http,
+      EMQ_AUTH__HTTP__AUTH_REQ: http:\/\/api:8080\/v1\/internal\/mqtt\/auth
+      EMQ_AUTH__HTTP__AUTH_REQ__METHOD: post
+      EMQ_AUTH__HTTP__AUTH_REQ__PARAMS: clientid=%c,username=%u,password=%P
+      EMQ_AUTH__HTTP__SUPER_REQ: http:\/\/api:8080\/v1\/internal\/superuser
+      EMQ_AUTH__HTTP__SUPER_REQ__METHOD: post
+      EMQ_AUTH__HTTP__SUPER_REQ__PARAMS: clientid=%c,username=%u
+      EMQ_AUTH__HTTP__ACL_REQ: http:\/\/api:8080\/acl
+      EMQ_AUTH__HTTP__ACL_REQ__METHOD: post
+      EMQ_AUTH__HTTP__ACL_REQ__PARAMS: acc=%A,username=%u,clientid=%c,ipaddr=%a,topic=%t
+      EMQ_AUTH__HTTP__ACL_NOMATCH: "deny"
+      EMQ_RETAINER__STORAGE_TYPE: disc
+      EMQ_RETAINER__MAX_MESSAGE_NUM: 100000
+      EMQ_RETAINER__MAX_PAYLOAD_SIZE: 64KB
+      EMQ_RETAINER__EXPIRED_AFTER: 300
+    command: sh -c "cat /run/secrets/emq_secrets | xargs -I{} env {} /opt/emqttd/start.sh"
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    deploy:
+      replicas: ${BROKER_EMQ_REPLICAS}
+      labels:
+        com.blanclabs.log: "t"
+        com.blanclabs.logType: "broker"
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/broker
+      update_config:
+        parallelism: 1
+        delay: 10s
+      placement:
+        constraints:
+          - node.role == worker

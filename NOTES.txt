@@ -1,0 +1,1 @@
+- If a service meant to be proxyied by Docker Flow Proxy can't get a single replica to get healthy (e.g. missing image), then the service doesn't get its DNS entry resolved, and so, HAProxy's configuration fails.

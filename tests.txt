@@ -1,0 +1,2 @@
+siege -c 5 https://api-test.nekso.io/v1/utilities/health
+while true; do echo '--'; docker ps --format '{{json .}}' | grep proxy_dfp | jq -c '{Names,Status}'; done;

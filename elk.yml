@@ -1,0 +1,108 @@
+version: "3.2"
+
+networks:
+  elk:
+    external:
+      name: nets_elk
+
+secrets:
+  logstash_config:
+    external:
+      name: ${elk_logstash_config}
+
+services:
+  elasticsearch:
+    image: elasticsearch:5.5
+    environment:
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+      xpack.security.enabled: 'false'
+      xpack.monitoring.enabled: 'false'
+      xpack.graph.enabled: 'false'
+      xpack.watcher.enabled: 'false'
+    ulimits:
+      memlock: -1
+      nofile:
+        hard: 65536
+        soft: 65536
+      nproc: 65538
+    networks:
+      - elk
+    command: elasticsearch -Enetwork.host=0.0.0.0 -Ediscovery.zen.ping.unicast.hosts=tasks.elasticsearch
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/elk
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role != manager
+      resources:
+        reservations:
+          memory: 1g
+
+  kibana:
+    image: kibana:5.5
+    ports:
+      - target: 5601
+        published: 5601
+        protocol: tcp
+        mode: ingress
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      XPACK_SECURITY_ENABLED: 'false'
+      XPACK_MONITORING_ENABLED: 'false'
+    networks:
+      - elk
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/elk
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role != manager
+    healthcheck:
+      test: wget -qO- http://localhost:5601 > /dev/null
+      interval: 30s
+      retries: 3
+
+  logstash:
+    image: logstash:5.5
+    networks:
+      - elk
+    secrets:
+      - source: logstash_config
+        target: /cfg/logstash.conf
+    command: logstash -f /cfg/logstash.conf
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/elk
+      placement:
+        constraints:
+          - node.role != manager
+
+  logspout:
+    image: bekt/logspout-logstash
+    networks:
+      - elk
+    environment:
+      INACTIVITY_TIMEOUT: 1m
+      LOGSTASH_TAGS: ${ENVIRONMENT},docker
+      DOCKER_LABELS: "t"
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+    command: "logstash+tcp://logstash:5000?filter.labels=com.blanclabs.log:t"
+    deploy:
+      labels:
+        com.docker.ucp.access.label: ${ACCESS_LEVEL}/elk
+      mode: global
+      restart_policy:
+        condition: on-failure
+        delay: 30s
